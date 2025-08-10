@@ -4,84 +4,6 @@ import { ArrowDownToLine, ArrowUpToLine, Trash2 } from "lucide-react";
 import type { Card } from "../types";
 import { parseCSV, toCSV } from "../lib/csv";
 
-function insertPlainTextAtCaret(text: string) {
-    // normalize line breaks
-    const clean = text.replace(/\r\n?/g, "\n");
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-
-    const range = sel.getRangeAt(0);
-    range.deleteContents();
-    const node = document.createTextNode(clean);
-    range.insertNode(node);
-
-    // move caret to the end of the inserted text
-    range.setStartAfter(node);
-    range.setEndAfter(node);
-    sel.removeAllRanges();
-    sel.addRange(range);
-}
-
-function handlePastePlain(e: React.ClipboardEvent) {
-    e.preventDefault();
-    const text = e.clipboardData.getData("text/plain") ?? "";
-    insertPlainTextAtCaret(text);
-}
-
-function handleDropPlain(e: React.DragEvent) {
-    // Stop the browser from dropping HTML
-    e.preventDefault();
-    const text = e.dataTransfer.getData("text/plain") ?? "";
-    insertPlainTextAtCaret(text);
-}
-
-
-function setRow(
-    cards: Card[],
-    upsert: (rows: Card[]) => void,
-    idx: number,
-    patch: Partial<Card>
-) {
-    const next = [...cards];
-    if (!next[idx]) next[idx] = { term: "", def: "" }; // guarantee it exists
-    next[idx] = { ...next[idx], ...patch };
-    // store only non-empty rows; blank row is added by the rows memo
-    const compact = next.filter(c => c.term.trim() || c.def.trim());
-    upsert(compact);
-}
-
-function EditableCell({
-    value,
-    onChange,
-  }: {
-    value: string;
-    onChange: (v: string) => void;
-  }) {
-    const ref = useRef<HTMLTableCellElement>(null);
-  
-    // Only sync when not focused so the caret doesn't jump
-    useEffect(() => {
-      const el = ref.current;
-      if (!el) return;
-      if (document.activeElement !== el) el.textContent = value;
-    }, [value]);
-  
-    return (
-      <td
-        ref={ref}
-        className="cell"
-        contentEditable
-        suppressContentEditableWarning
-        dir="ltr"
-        onInput={(e) => onChange(e.currentTarget.textContent ?? "")}
-        onPaste={handlePastePlain}
-        onDrop={handleDropPlain}
-      />
-    );
-  }
-  
-
-
 export default function TableEditor() {
     const { cards, upsertCards, clearAll } = useApp();
     const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -246,15 +168,12 @@ export default function TableEditor() {
                     <tbody ref={tbodyRef}>
                         {rows.map((r, i) => (
                             <tr key={i}>
-                                <EditableCell
-                                    value={r.term}
-                                    onChange={(text) => setRow(cards, upsertCards, i, { term: text })}
-                                />
-                                <EditableCell
-                                    value={r.def}
-                                    onChange={(text) => setRow(cards, upsertCards, i, { def: text })}
-                                />
-
+                                <td className="cell" dir="ltr" contentEditable suppressContentEditableWarning>
+                                    {r.term}
+                                </td>
+                                <td className="cell" dir="ltr" contentEditable suppressContentEditableWarning>
+                                    {r.def}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
