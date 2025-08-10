@@ -59,11 +59,11 @@ function EditableCell({
   }) {
     const ref = useRef<HTMLTableCellElement>(null);
   
-    // Only sync when not focused so the caret doesn't jump
+    // Sync the DOM when value changes, but avoid useless writes that would move the caret
     useEffect(() => {
       const el = ref.current;
       if (!el) return;
-      if (document.activeElement !== el) el.textContent = value;
+      if (el.textContent !== value) el.textContent = value;
     }, [value]);
   
     return (
@@ -83,7 +83,7 @@ function EditableCell({
 
 
 export default function TableEditor() {
-    const { cards, upsertCards, clearAll } = useApp();
+    const { cards, upsertCards, clearAll, undo, redo } = useApp();
     const tbodyRef = useRef<HTMLTableSectionElement>(null);
     const fileRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +116,19 @@ export default function TableEditor() {
             const table = tr.parentElement as HTMLTableSectionElement;
             const rowIndex = Array.from(table.children).indexOf(tr);
             const colIndex = Array.from(tr.children).indexOf(td);
+
+            const lower = e.key.toLowerCase();
+            const ctrlOrMeta = e.ctrlKey || e.metaKey;
+            if (ctrlOrMeta && !e.shiftKey && lower === "z") {
+                e.preventDefault();
+                undo();
+                return;
+            }
+            if (ctrlOrMeta && (lower === "y" || (e.shiftKey && lower === "z"))) {
+                e.preventDefault();
+                redo();
+                return;
+            }
 
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -164,7 +177,7 @@ export default function TableEditor() {
             table.removeEventListener("input", onInput);
             table.removeEventListener("keydown", onKeydown as any);
         };
-    }, [upsertCards]);
+    }, [upsertCards, undo, redo]);
 
 
     function addEmptyRow(tb: HTMLTableSectionElement) {

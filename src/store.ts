@@ -7,6 +7,8 @@ const PK = "fc-prefs-v1";
 
 export type AppState = {
     cards: Card[];
+    undoStack: Card[][];
+    redoStack: Card[][];
     view: "edit" | "review";
     order: Order;
     direction: Direction;
@@ -26,6 +28,8 @@ export type AppState = {
     setDirection: (d: Direction) => void;
     setDark: (b: boolean) => void;
     upsertCards: (cards: Card[]) => void;
+    undo: () => void;
+    redo: () => void;
     clearAll: () => void;
     startReview: () => void;
     next: () => void;
@@ -49,6 +53,8 @@ function loadPrefs(): Partial<Pick<AppState, "order" | "direction" | "dark">> {
 
 export const useApp = create<AppState>((set, get) => ({
     cards: [],
+    undoStack: [],
+    redoStack: [],
     view: "edit",
     order: loadPrefs().order || "chronological",
     direction: loadPrefs().direction || "term-first",
@@ -63,9 +69,9 @@ export const useApp = create<AppState>((set, get) => ({
     loadFromStorage: () => {
         try {
             const raw = JSON.parse(localStorage.getItem(SK) || "[]");
-            set({ cards: Array.isArray(raw) ? raw : [] });
+            set({ cards: Array.isArray(raw) ? raw : [], undoStack: [], redoStack: [] });
         } catch {
-            set({ cards: [] });
+            set({ cards: [], undoStack: [], redoStack: [] });
         }
     },
 
@@ -86,14 +92,50 @@ export const useApp = create<AppState>((set, get) => ({
     },
 
     upsertCards: (cards) => {
-        set({ cards });
+        set((state) => ({
+            cards,
+            undoStack: [...state.undoStack, state.cards],
+            redoStack: [],
+        }));
         // batch save
+        queueMicrotask(() => localStorage.setItem(SK, JSON.stringify(get().cards)));
+    },
+
+    undo: () => {
+        const { undoStack, cards, redoStack } = get();
+        if (undoStack.length === 0) return;
+        const prev = undoStack[undoStack.length - 1] as Card[];
+        set({
+            cards: prev,
+            undoStack: undoStack.slice(0, -1),
+            redoStack: [cards, ...redoStack],
+        });
+        queueMicrotask(() => localStorage.setItem(SK, JSON.stringify(get().cards)));
+    },
+
+    redo: () => {
+        const { redoStack, cards, undoStack } = get();
+        if (redoStack.length === 0) return;
+        const next = redoStack[0] as Card[];
+        set({
+            cards: next,
+            undoStack: [...undoStack, cards],
+            redoStack: redoStack.slice(1),
+        });
         queueMicrotask(() => localStorage.setItem(SK, JSON.stringify(get().cards)));
     },
 
     clearAll: () => {
         if (!confirm("Clear all cards?")) return;
-        set({ cards: [], learned: new Set(), orderList: [], idx: 0, flipped: false });
+        set((state) => ({
+            cards: [],
+            undoStack: [...state.undoStack, state.cards],
+            redoStack: [],
+            learned: new Set(),
+            orderList: [],
+            idx: 0,
+            flipped: false,
+        }));
         localStorage.setItem(SK, JSON.stringify([]));
     },
 
